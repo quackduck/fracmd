@@ -1,5 +1,5 @@
 use image::{ImageBuffer, Rgba};
-use num::complex::Complex;
+use num::{complex::Complex, traits::Inv};
 // use rand::{Rng, distributions::Uniform};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 mod rgbaf;
@@ -27,6 +27,10 @@ fn compute_brot(i: i64, w: i64, h: i64, args: &Args) -> Rgba<u16> {
     let d = normalize_coords(1, 1, w, h, args.zoom) - normalize_coords(0, 0, w, h, args.zoom);
     // let mut rng = rand::thread_rng();
     // let distr = Uniform::new(-1.0, 1.0);
+    // let mut maxv = 0.0;
+    // let mut minv = 0.0;
+    // let currPoint = normalize_coords(i / h, i % h, w, h, args.zoom) + args.origin;
+    let mut past_iter_point = Complex::new(0.0,0.0);
     for s in 0..args.samples {
         let mut c = normalize_coords(i / h, i % h, w, h, args.zoom) + args.origin;
         // c.re += d.re * (rng.sample(distr) / args.sample_d);
@@ -34,15 +38,45 @@ fn compute_brot(i: i64, w: i64, h: i64, args: &Args) -> Rgba<u16> {
         c.re += d.re * (2.0 * (s % ((args.samples as f32).sqrt() as usize)) as f32 / (args.samples as f32).sqrt() - 1.0) / args.sample_d; // equally spaced deltas
         c.im += d.im * (2.0 * (s / ((args.samples as f32).sqrt() as usize)) as f32 / (args.samples as f32).sqrt() - 1.0) / args.sample_d;
         let mut z = c.clone();
-        // let dc = 1.0;
+        // let dc = 0.0;
         // let mut dz = c.clone();
+        // let mut angle_sum = 0.0;
         // let mut act_to_der = Complex::new(0.0,0.0);
         let mut i = 0.0;
+        // let mut deltaZ = Complex::new(0.0,0.0);
         // let mut s = 0.0;
         // abs(z) < args.bail &&
+        // let mut max_norm = 0.0;
+        // let mut min_norm = 0.0;
+        let mut z_sum_norm = 0.0;
         while (z.norm_sqr() < args.bail) && i < args.limit {
+            // if i % 20.0 == 0.0 {
+            //     past_iter_point = z.clone();
+            // } else if past_iter_point == z {
+            //     i = args.limit;
+            //     // dbg!("bailing!");
+            //     break;
+            // }
             // act_to_der += dz;
-            z = z * z + c;
+
+            // deltaZ = z*z+c - z;
+            // z = z + deltaZ;
+            z_sum_norm += z.norm();
+            z = z*z + c;
+
+            // if (z).norm_sqr() > max_norm {
+            //     max_norm = (z).norm_sqr();
+            // }
+            // if (z).norm_sqr() < min_norm {
+            //     min_norm = (z).norm_sqr();
+            // }
+            // deltaZ = z-c;
+            // angle_sum = angle_sum + (deltaZ.im/deltaZ.re).atan();
+            // let angle = (deltaZ.im).atan2(deltaZ.re);
+            // if angle < 0.0 {
+            //     angle = 2.0*std::f32::consts::PI + angle;
+            // }
+            // angle_sum = angle_sum + angle;
             // dz = (dz * 2.0 * z) + dc;
             i += 1.0;
             // s = s + (-(abs(z).sqrt())).exp();
@@ -55,16 +89,40 @@ fn compute_brot(i: i64, w: i64, h: i64, args: &Args) -> Rgba<u16> {
         //     // dbg!(v);
         // }
 
-        // z = (z-c).sqrt(); // go back to the one just before exit
 
-        let mut v = (z.norm_sqr()) / args.bail;
+        // z = (z-c).sqrt(); // go back to the one just before exit
+        // let mut v = 1000.0* act_to_der.norm_sqr() / args.bail;
+        // let mut v: f32 = act_to_der.norm_sqr();
+        // let mut v: f32 = angle_sum;
+        // if s == 0 {
+        //     maxv = v;
+        //     minv = v;
+        // }
+        // if v > maxv {maxv = v;}
+        // if v < minv {minv = v;}
+
+        let mut v = ((z_sum_norm / i).log2()+2.0).inv().powf(0.75);
+
+        // v = v.sqrt();
+
+        // let mut v: f32 = angle_sum; // (2.0*std::f32::consts::PI);
+        // let mut v: f32 = max_norm-min_norm;//.sqrt();
+        // dbg!(v);
+        // if v < 0.0 {
+        //     dbg!(v);
+        // }
+        // v = (1.0 - (1.0/(1.0+v.abs())));
+        // v = v.sin();
+        // v = (2.0/(1.0+(-v/1.0).exp()));
+        // let mut v = (z.norm_sqr()) / args.bail;
+        // v = v.powf(1.0/16.0);
+
         // if v > 1.0 {
         //     dbg!(v, z.norm_sqr(), args.bail);
         // }
         // let mut v = (i) / args.limit;
         // dbg!(v);
         // v = v.exp();
-        v = v.powf(1.0/4.0);
         // v = v.powf(1.0/16.0); // adjust power if needed, smaller exponent is more color
         // v = v* (1.0-((z-args.origin).norm_sqr()).sin()/1.0);
         // v = -v + 1.0;
@@ -100,6 +158,8 @@ fn compute_brot(i: i64, w: i64, h: i64, args: &Args) -> Rgba<u16> {
         // out.b = 1.0 - out.b;
     }
     out = out / args.samples as f32;
+    // dbg!("st", maxv, minv, "en");
+    // println!();
     Rgba::from(
         out.to_RGB()
             .to_arr()
@@ -134,8 +194,9 @@ fn main() {
         // zoom: 0.5,
         zoom: 15000.0,
         samples: 49,
-        limit: 128.0*3.0*4.0*2.0*4.0,
+        limit: 128.0*2.0*4.0,//*2.0*4.0,
         bail: 8.0,
+        // bail: 2.0,
         // c_exp: 2.0,
         sample_d: 8.0,
     };
